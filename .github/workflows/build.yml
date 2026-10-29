@@ -1,0 +1,34 @@
+name: Build Doboku IPA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [doboku-ios.zip]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unzip project
+        run: unzip -q doboku-ios.zip -d doboku
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build
+        working-directory: doboku
+        run: |
+          xcodegen generate
+          xcodebuild -project Doboku.xcodeproj -target Doboku \
+            -configuration Release -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+          mkdir -p Payload
+          cp -R build/Release-iphoneos/Doboku.app Payload/
+          zip -qr ../Doboku.ipa Payload
+      - name: Publish IPA to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest -y --cleanup-tag || true
+          gh release create latest Doboku.ipa --title "断面拾いくん 最新版" --notes "自動ビルド"
